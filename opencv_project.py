@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 
 # import the necessary packages
-from collections import deque
 from WebcamVideoStream import WebcamVideoStream
 import numpy as np
 import argparse
-import cv2
 import atexit
+from collections import deque
+
+import cv2
+import numpy as np
 
 
 def get_arguments():
@@ -38,6 +40,10 @@ def setup_trackbars():
         for j in "HSV":
             cv2.createTrackbar("%s_%s" % (j, i), "Trackbars", v, 255, callback)
 
+            # cv2.createTrackbar("MORPH Shape", "Trackbars", 0, 2, callback)
+            # cv2.createTrackbar("kernel_m", "Trackbars", 0, 20, callback)
+            # cv2.createTrackbar("kernel_n", "Trackbars", 0, 20, callback)
+
 
 def get_trackbar_values():
     values = []
@@ -61,9 +67,19 @@ class BallTracking:
     def apply_masks(self, frame, track_bar_color):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
+        # morph_indx = cv2.getTrackbarPos("MORPH Shape", "Trackbars")
+        # m = cv2.getTrackbarPos("kernel_m", "Trackbars")
+        # n = cv2.getTrackbarPos("kernel_n", "Trackbars")
+        #
+        # shapes = ["MORPH_ELLIPSE", "MORPH_RECT", "MORPH_CROSS"]
+
+        # morph_shape = getattr(cv2, shapes[morph_indx])
+        # kernel_close_morph = cv2.getStructuringElement(morph_shape, (2*m+1, 2*n+1))
+        # kernel_erosion = cv2.getStructuringElement(morph_shape, (2*m+1, 2*n+1))
+
         # morphology kernels
-        kernel_close_morph = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
-        kernel_erosion = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
+        kernel_open = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
         if track_bar_color:
             v1_min, v2_min, v3_min, v1_max, v2_max, v3_max = get_trackbar_values()
@@ -73,9 +89,11 @@ class BallTracking:
         # apply inRange filter then erode to lower noise and then closing (erosion then dilation)
         self.mask = cv2.inRange(hsv, self.clr_lower, self.clr_upper)
         cv2.imshow('inRange', self.mask)
-        self.mask = cv2.erode(self.mask, kernel_erosion, iterations=1)
-        cv2.imshow('erode', self.mask)
-        self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_CLOSE, kernel_close_morph)
+        # self.mask = cv2.erode(self.mask, kernel_erosion, iterations=1)
+        # cv2.imshow('erode', self.mask)
+        self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_OPEN, kernel_open)
+        cv2.imshow('opening', self.mask)
+        self.mask = cv2.morphologyEx(self.mask, cv2.MORPH_CLOSE, kernel_close)
         cv2.imshow('closing', self.mask)
 
     def find_contours(self, frame, left_border, right_border):
@@ -150,15 +168,20 @@ def main():
 
     # grab a reference to the webcam
     camera = cv2.VideoCapture(0)
+    high = int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    width = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+
+    # Define the codec and create VideoWriter object
+    # fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    # out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480))
 
     # create register to cleanup on exit
     atexit.register(cleanup, camera)
 
     # define the lower and upper boundaries of the "red" ball in the HSV color space, then initialize the
     # list of tracked points and run_once parameter for roi
-    redLower = (170, 90, 0)
-    redUpper = (185, 180, 255)
-    roi_taken = False
+    redLower = (160, 60, 0)
+    redUpper = (180, 180, 255)
 
     track_object = BallTracking(args.buffer, redLower, redUpper)
 
@@ -166,11 +189,6 @@ def main():
     while True:
         # grab the current frame
         (grabbed, frame) = camera.read()
-
-        # get resolution of image
-        if roi_taken is False:
-            (high, width, _) = frame.shape
-            roi_taken = True
 
         # draw borders indications and return border values
         left_border, right_border = draw_borders(frame=frame, high=high, width=width)
@@ -186,8 +204,11 @@ def main():
 
         # show the frame to our screen
         cv2.imshow("Frame", frame)
-        key = cv2.waitKey(1) & 0xFF
 
+        # write frame to "output.avi"
+        # out.write(frame)
+
+        key = cv2.waitKey(1) & 0xFF
         # if the 'q' key is pressed, stop the loop
         if key == ord("q"):
             break
