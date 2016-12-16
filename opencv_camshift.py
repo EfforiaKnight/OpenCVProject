@@ -115,7 +115,7 @@ class App(object):
                 self.selection = None
                 prob = cv2.calcBackProject([hsv], [0], self.hist, [0, 180], 1)
                 prob &= mask
-                term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 80, 1)
+                term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
                 track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
 
                 pts = np.int0(cv2.boxPoints(track_box))
