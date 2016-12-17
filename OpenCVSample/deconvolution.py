@@ -33,11 +33,10 @@ Examples:
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
+import numpy as np
 
 # local module
-from common import nothing
 
 
 def blur_edge(img, d=31):

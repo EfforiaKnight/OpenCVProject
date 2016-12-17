@@ -25,15 +25,14 @@ Select a textured planar object to track by drawing a box with a mouse.
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
-
-# local modules
+import numpy as np
 import video
-from video import presets
-import common
-from common import getsize, draw_keypoints
 from plane_tracker import PlaneTracker
+from video import presets
+
+from Playground import common
+from Playground.common import getsize, draw_keypoints
 
 
 class App:

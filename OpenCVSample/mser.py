@@ -14,9 +14,9 @@ Keys:
 
 '''
 
-import numpy as np
 import cv2
-import video
+
+from Playground import video
 
 if __name__ == '__main__':
     import sys

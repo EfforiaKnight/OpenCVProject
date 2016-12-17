@@ -17,9 +17,10 @@ gabor_threads.py [image filename]
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
-import cv2
 from multiprocessing.pool import ThreadPool
+
+import cv2
+import numpy as np
 
 
 def build_filters():
@@ -49,7 +50,7 @@ def process_threaded(img, filters, threadn = 8):
 
 if __name__ == '__main__':
     import sys
-    from common import Timer
+    from Playground.common import Timer
 
     print(__doc__)
     try:

@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
 # import the necessary packages
-from WebcamVideoStream import WebcamVideoStream
-import numpy as np
 import argparse
 import atexit
 from collections import deque

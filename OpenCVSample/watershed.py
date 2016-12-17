@@ -25,9 +25,10 @@ Keys
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
-from common import Sketcher
+import numpy as np
+
+from Playground.common import Sketcher
 
 class App:
     def __init__(self, fn):

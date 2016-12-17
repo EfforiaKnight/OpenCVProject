@@ -8,14 +8,12 @@ Keys:
 
 '''
 
-import numpy as np
-import cv2
-
-# built-in modules
 import sys
 
-# local modules
-import video
+import cv2
+import numpy as np
+
+from Playground import video
 
 if __name__ == '__main__':
 

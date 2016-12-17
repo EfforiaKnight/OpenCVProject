@@ -16,14 +16,12 @@ default values:
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
-import cv2
-
-# local modules
-from common import splitfn
-
-# built-in modules
 import os
+
+import cv2
+import numpy as np
+
+from Playground.common import splitfn
 
 if __name__ == '__main__':
     import sys

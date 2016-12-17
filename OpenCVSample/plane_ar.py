@@ -25,12 +25,13 @@ Use 'focal' slider to adjust to camera focal length for proper video augmentatio
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
+import numpy as np
 import video
-import common
 from plane_tracker import PlaneTracker
 from video import presets
+
+from Playground import common
 
 # Simple model of a house - cube with a triangular prism "roof"
 ar_verts = np.float32([[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0],

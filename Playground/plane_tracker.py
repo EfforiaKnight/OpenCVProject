@@ -38,7 +38,7 @@ import cv2
 from collections import namedtuple
 
 # local modules
-import common
+from Playground import common
 
 cv2.ocl.setUseOpenCL(False)
 

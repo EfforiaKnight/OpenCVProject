@@ -14,7 +14,9 @@ Alexander Mordvintsev 6/10/12
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
 import sys
+
 PY3 = sys.version_info[0] == 3
 
 if PY3:
@@ -22,8 +24,8 @@ if PY3:
 
 import numpy as np
 import cv2
-import video
-from common import nothing, getsize
+from Playground import video
+from Playground.common import nothing, getsize
 
 def build_lappyr(img, leveln=6, dtype=np.int16):
     img = dtype(img)

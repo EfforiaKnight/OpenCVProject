@@ -27,10 +27,10 @@ from __future__ import print_function
 
 import cv2
 import numpy as np
-
-import common
-from common import getsize, draw_keypoints
 from plane_tracker import PlaneTracker
+
+from Playground import common
+from Playground.common import getsize, draw_keypoints
 
 
 class App:

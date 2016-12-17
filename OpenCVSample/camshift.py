@@ -24,7 +24,9 @@ Keys:
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
 import sys
+
 PY3 = sys.version_info[0] == 3
 
 if PY3:
@@ -34,8 +36,8 @@ import numpy as np
 import cv2
 
 # local module
-import video
-from video import presets
+from Playground import video
+from Playground.video import presets
 
 
 class App(object):

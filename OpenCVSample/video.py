@@ -32,17 +32,13 @@ Keys:
 # Python 2/3 compatibility
 from __future__ import print_function
 
+import cv2
 import numpy as np
 from numpy import pi, sin, cos
-
-import cv2
-
-# built-in modules
-from time import clock
-
-# local modules
 from tst_scene_render import TestSceneRender
-import common
+
+from Playground import common
+
 
 class VideoSynthBase(object):
     def __init__(self, size=None, noise=0.0, bg = None, **params):

@@ -9,7 +9,9 @@ Inspired by http://www.jonathanmccabe.com/Cyclic_Symmetric_Multi-Scale_Turing_Pa
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
 import sys
+
 PY3 = sys.version_info[0] == 3
 
 if PY3:
@@ -17,7 +19,7 @@ if PY3:
 
 import numpy as np
 import cv2
-from common import draw_str
+from Playground.common import draw_str
 import getopt, sys
 from itertools import count
 

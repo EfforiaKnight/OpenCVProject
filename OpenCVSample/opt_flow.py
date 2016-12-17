@@ -16,9 +16,10 @@ Keys:
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
-import video
+import numpy as np
+
+from Playground import video
 
 
 def draw_flow(img, flow, step=16):

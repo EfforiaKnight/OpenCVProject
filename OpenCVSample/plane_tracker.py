@@ -23,7 +23,9 @@ Select a textured planar object to track by drawing a box with a mouse.
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
 import sys
+
 PY3 = sys.version_info[0] == 3
 
 if PY3:
@@ -36,9 +38,8 @@ import cv2
 from collections import namedtuple
 
 # local modules
-import video
-import common
-from video import presets
+from Playground import common, video
+from Playground.video import presets
 
 
 FLANN_INDEX_KDTREE = 1

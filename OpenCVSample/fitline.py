@@ -24,7 +24,9 @@ ESC   - exit
 
 # Python 2/3 compatibility
 from __future__ import print_function
+
 import sys
+
 PY3 = sys.version_info[0] == 3
 
 import numpy as np
@@ -34,7 +36,7 @@ import cv2
 import itertools as it
 
 # local modules
-from common import draw_str
+from Playground.common import draw_str
 
 
 w, h = 512, 256

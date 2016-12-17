@@ -23,9 +23,9 @@ r     - toggle RANSAC
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
-from common import draw_str
+
+from Playground.common import draw_str
 
 lk_params = dict(winSize=(19, 19),
                  maxLevel=2,

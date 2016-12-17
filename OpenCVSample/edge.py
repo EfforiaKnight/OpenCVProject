@@ -13,14 +13,12 @@ Usage:
 # Python 2/3 compatibility
 from __future__ import print_function
 
+import sys
+
 import cv2
 import numpy as np
 
-# relative module
-import video
-
-# built-in module
-import sys
+from Playground import video
 
 
 if __name__ == '__main__':

@@ -17,9 +17,10 @@ USAGE
 # Python 2/3 compatibility
 from __future__ import print_function
 
-import numpy as np
 import cv2
-from common import anorm, getsize
+import numpy as np
+
+from Playground.common import anorm
 
 FLANN_INDEX_KDTREE = 1  # bug: flann enums are missing
 FLANN_INDEX_LSH    = 6
