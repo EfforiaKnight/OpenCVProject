@@ -26,11 +26,6 @@ Keys:
 from __future__ import print_function
 import sys
 
-PY3 = sys.version_info[0] == 3
-
-if PY3:
-    xrange = range
-
 from collections import deque
 import numpy as np
 import cv2
@@ -52,6 +47,23 @@ class App(object):
         self.show_backproj = False
         self.track_window = None
 
+        # set up kalman
+        self.kalman = cv2.KalmanFilter(4, 2)
+        self.kalman.measurementMatrix = np.array([[1, 0, 0, 0],
+                                                  [0, 1, 0, 0]], np.float32)
+        self.kalman.transitionMatrix = np.array([[1, 0, 1, 0],
+                                                 [0, 1, 0, 1],
+                                                 [0, 0, 1, 0],
+                                                 [0, 0, 0, 1]], np.float32)
+        self.kalman.processNoiseCov = np.array([[1, 0, 0, 0],
+                                                [0, 1, 0, 0],
+                                                [0, 0, 1, 0],
+                                                [0, 0, 0, 1]], np.float32) * 0.03
+        self.measurement = np.array((2, 1), np.float32)
+        self.prediction = np.zeros((2, 1), np.float32)
+
+        self.lastCenter = (0, 0)
+
     def onmouse(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             self.drag_start = (x, y)
@@ -68,9 +80,9 @@ class App(object):
 
     def show_hist(self):
         bin_count = self.hist.shape[0]
-        bin_w = 7
+        bin_w = 24
         img = np.zeros((256, bin_count * bin_w, 3), np.uint8)
-        for i in xrange(bin_count):
+        for i in range(bin_count):
             h = int(self.hist[i])
             cv2.rectangle(img, (i * bin_w + 2, 255), ((i + 1) * bin_w - 2, 255 - h),
                           (int(180.0 * i / bin_count), 255, 255), -1)
@@ -79,7 +91,7 @@ class App(object):
 
     def draw_trails(self, vis):
         # loop over the set of tracked points
-        for i in xrange(1, len(self.trail_pts)):
+        for i in range(1, len(self.trail_pts)):
             # if either of the tracked points are None, ignore
             # them
             if self.trail_pts[i - 1] is None or self.trail_pts[i] is None:
@@ -94,17 +106,24 @@ class App(object):
         while True:
             ret, self.frame = self.cam.read()
             vis = self.frame.copy()
+            # self.frame = cv2.GaussianBlur(self.frame, (11, 11), 0)
+            # kernel = np.array([[-2, -1, 0],
+            #                    [-1, 1, 1],
+            #                    [0, 1, 2]])
+            # cv2.filter2D(self.frame, -1, kernel, self.frame)
+            self.frame = cv2.medianBlur(self.frame, 5)
+            cv2.imshow("blur", self.frame)
             hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, np.array((0., 60., 32.)), np.array((180., 255., 255.)))
-            cv2.imshow("mask", mask)
+            # cv2.imshow("mask", mask)
 
             if self.selection:
                 x0, y0, x1, y1 = self.selection
                 hsv_roi = hsv[y0:y1, x0:x1]
                 mask_roi = mask[y0:y1, x0:x1]
-                hist = cv2.calcHist([hsv_roi], [0], mask_roi, [36], [0, 180])
+                hist = cv2.calcHist([hsv_roi], [0], mask_roi, [16], [0, 180])
                 cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
-                self.hist = hist
+                self.hist = hist.reshape(-1)
                 self.show_hist()
 
                 vis_roi = vis[y0:y1, x0:x1]
@@ -113,34 +132,46 @@ class App(object):
 
             if self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0:
                 self.selection = None
+
                 prob = cv2.calcBackProject([hsv], [0], self.hist, [0, 180], 1)
                 prob &= mask
+
                 term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
                 track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
 
                 pts = np.int0(cv2.boxPoints(track_box))
                 ((x, y), radius) = cv2.minEnclosingCircle(pts)
-                M = cv2.moments(pts)
-                try:
-                    center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-                    if radius > 17:
-                        # draw the circle and centroid on the frame, then update the list of tracked points
-                        cv2.putText(vis, "[{:.1f},{:.1f}] R={:.1f}".format(x, y, radius), (20, self.high - 10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
-                        cv2.circle(vis, (int(x), int(y)), int(radius),
-                                   (0, 255, 255), 2)
-                        cv2.circle(vis, center, 5, (0, 0, 255), -1)
+                # M = cv2.moments(pts)
+                x, y = int(x), int(y)
+                # center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
 
-                        # check if borders was trespassed
-                        # trespass_borders(frame=frame, curr_pos=x, left_border=left_border, right_border=right_border)
+                self.kalman.correct(np.array([np.float32(x), np.float32(y)], np.float32))
+                prediction = self.kalman.predict()[:2][:2]
 
-                        # update the points queue
-                        self.trail_pts.appendleft(center)
-                    else:
-                        self.trail_pts.append(None)
-                except:
-                    print(track_box)
+                if norm_sqrt(prediction, self.lastCenter) > 350 or cv2.contourArea(pts) < 10:
+                    # Target Lost
+                    cv2.putText(vis, "Target lost", (int(self.width / 2), int(self.high / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (0, 0, 255), 1, cv2.LINE_AA)
+                else:
+                    # draw the circle and centroid on the frame, then update the list of tracked points
+                    cv2.putText(vis, "[{:.1f},{:.1f}] R={:.1f}".format(int(prediction[0]), int(prediction[1]), radius),
+                                (19, self.high - 9),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+                    cv2.putText(vis, "[{:.1f},{:.1f}] R={:.1f}".format(int(prediction[0]), int(prediction[1]), radius),
+                                (20, self.high - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
 
+                    cv2.circle(vis, (x, y), int(radius), (0, 255, 255), 2)
+                    cv2.circle(vis, (int(prediction[0]), int(prediction[1])), int(radius), (0, 255, 0), 2)
+
+                    cv2.circle(vis, (x, y), 4, (0, 0, 255), -1)
+
+                    # check if borders was trespassed
+                    # trespass_borders(frame=frame, curr_pos=x, left_border=left_border, right_border=right_border)
+
+                    # update the points queue
+                    self.trail_pts.appendleft((int(x), int(y)))
+                    self.lastCenter = prediction
                 if self.show_backproj:
                     vis[:] = prob[..., np.newaxis]
 
@@ -157,6 +188,10 @@ class App(object):
             if ch == ord('b'):
                 self.show_backproj = not self.show_backproj
         cv2.destroyAllWindows()
+
+
+def norm_sqrt(vect1, vect2):
+    return cv2.norm((int(vect1[0] - vect2[0]), int(vect1[1] - vect2[1])), cv2.NORM_L2)
 
 
 if __name__ == '__main__':
