@@ -128,6 +128,7 @@ class App(object):
 
                 vis_roi = vis[y0:y1, x0:x1]
                 cv2.bitwise_not(vis_roi, vis_roi)
+                """ insert Morphology to reduce noise """
                 vis[mask == 0] = 0
 
             if self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0:
@@ -140,29 +141,32 @@ class App(object):
                 track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
 
                 pts = np.int0(cv2.boxPoints(track_box))
-                ((x, y), radius) = cv2.minEnclosingCircle(pts)
-                # M = cv2.moments(pts)
-                x, y = int(x), int(y)
-                # center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+                # ((x, y), radius) = cv2.minEnclosingCircle(pts)
+                # x, y = int(x), int(y)
+                M = cv2.moments(pts)
+                x, y = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+                area = M["m00"]
 
                 self.kalman.correct(np.array([np.float32(x), np.float32(y)], np.float32))
                 prediction = self.kalman.predict()[:2][:2]
 
-                if norm_sqrt(prediction, self.lastCenter) > 350 or cv2.contourArea(pts) < 10:
+                if self.norm_sqrt(prediction, self.lastCenter) > 350 or area < 10:
                     # Target Lost
                     cv2.putText(vis, "Target lost", (int(self.width / 2), int(self.high / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                                 (0, 0, 255), 1, cv2.LINE_AA)
                 else:
                     # draw the circle and centroid on the frame, then update the list of tracked points
-                    cv2.putText(vis, "[{:.1f},{:.1f}] R={:.1f}".format(int(prediction[0]), int(prediction[1]), radius),
+                    cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(int(prediction[0]), int(prediction[1]), area),
                                 (19, self.high - 9),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-                    cv2.putText(vis, "[{:.1f},{:.1f}] R={:.1f}".format(int(prediction[0]), int(prediction[1]), radius),
+                    cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(int(prediction[0]), int(prediction[1]), area),
                                 (20, self.high - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
-
-                    cv2.circle(vis, (x, y), int(radius), (0, 255, 255), 2)
-                    cv2.circle(vis, (int(prediction[0]), int(prediction[1])), int(radius), (0, 255, 0), 2)
+                    try:
+                        cv2.polylines(vis, pts, )
+                        cv2.ellipse(vis, track_box, (0, 0, 255), 2)
+                    except:
+                        print(track_box)
 
                     cv2.circle(vis, (x, y), 4, (0, 0, 255), -1)
 
@@ -175,10 +179,7 @@ class App(object):
                 if self.show_backproj:
                     vis[:] = prob[..., np.newaxis]
 
-                    # try:
-                    #     cv2.ellipse(vis, track_box, (0, 0, 255), 2)
-                    # except:
-                    #     print(track_box)
+
             self.draw_trails(vis)
             cv2.imshow('camshift', vis)
 
@@ -189,9 +190,9 @@ class App(object):
                 self.show_backproj = not self.show_backproj
         cv2.destroyAllWindows()
 
-
-def norm_sqrt(vect1, vect2):
-    return cv2.norm((int(vect1[0] - vect2[0]), int(vect1[1] - vect2[1])), cv2.NORM_L2)
+    @staticmethod
+    def norm_sqrt(vect1, vect2):
+        return cv2.norm((int(vect1[0] - vect2[0]), int(vect1[1] - vect2[1])), cv2.NORM_L2)
 
 
 if __name__ == '__main__':
