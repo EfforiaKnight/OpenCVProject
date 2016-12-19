@@ -35,7 +35,7 @@ class App(object):
     def __init__(self, video_src, deque_len):
         self.cam = cv2.VideoCapture(video_src)
         ret, self.frame = self.cam.read()
-        self.high = int(self.cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.height = int(self.cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.width = int(self.cam.get(cv2.CAP_PROP_FRAME_WIDTH))
         cv2.namedWindow('camshift')
         cv2.setMouseCallback('camshift', self.onmouse)
@@ -106,13 +106,13 @@ class App(object):
         while True:
             ret, self.frame = self.cam.read()
             vis = self.frame.copy()
-            # self.frame = cv2.GaussianBlur(self.frame, (11, 11), 0)
+            self.frame = cv2.GaussianBlur(self.frame, (5, 5), 0)
             # kernel = np.array([[-2, -1, 0],
             #                    [-1, 1, 1],
             #                    [0, 1, 2]])
             # cv2.filter2D(self.frame, -1, kernel, self.frame)
-            self.frame = cv2.medianBlur(self.frame, 5)
-            cv2.imshow("blur", self.frame)
+            # self.frame = cv2.medianBlur(self.frame, 5)
+            # cv2.imshow("blur", self.frame)
             hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, np.array((0., 60., 32.)), np.array((180., 255., 255.)))
             # cv2.imshow("mask", mask)
@@ -128,7 +128,6 @@ class App(object):
 
                 vis_roi = vis[y0:y1, x0:x1]
                 cv2.bitwise_not(vis_roi, vis_roi)
-                """ insert Morphology to reduce noise """
                 vis[mask == 0] = 0
 
             if self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0:
@@ -136,49 +135,57 @@ class App(object):
 
                 prob = cv2.calcBackProject([hsv], [0], self.hist, [0, 180], 1)
                 prob &= mask
+                ret, prob = cv2.threshold(prob, 220, 255, cv2.THRESH_BINARY)
+                prob = cv2.morphologyEx(prob, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)), iterations=2)
+                cv2.imshow("prob thresh", prob)
 
                 term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
                 track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
+                print("track window ", self.track_window)
 
                 pts = np.int0(cv2.boxPoints(track_box))
-                # ((x, y), radius) = cv2.minEnclosingCircle(pts)
-                # x, y = int(x), int(y)
-                M = cv2.moments(pts)
-                x, y = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-                area = M["m00"]
+                x, y = track_box[0]
+                height, width = track_box[1]
+                angle = track_box[2]
+                area = height * width
 
-                self.kalman.correct(np.array([np.float32(x), np.float32(y)], np.float32))
-                prediction = self.kalman.predict()[:2][:2]
+                print("x, y", (x, y))
+                print("height = {:.2f} width = {:.2f}".format(height, width))
 
-                if self.norm_sqrt(prediction, self.lastCenter) > 350 or area < 10:
+                self.kalman.correct(np.array([[np.float32(x)], [np.float32(y)]]))
+                tp = self.kalman.predict()
+                pred_box = ((int(tp[0]), int(tp[1])), (height, width), angle)
+                print("pred box", pred_box)
+                print("prediction: \n", tp)
+
+                if self.norm_sqrt(tp, self.lastCenter) > 120 or area < 200:
                     # Target Lost
-                    cv2.putText(vis, "Target lost", (int(self.width / 2), int(self.high / 2)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                (0, 0, 255), 1, cv2.LINE_AA)
+                    cv2.putText(vis, "Target lost", (int(self.width / 2), int(self.height / 2)), cv2.FONT_HERSHEY_SIMPLEX,
+                                0.6, (0, 0, 255), 1, cv2.LINE_AA)
+                    self.track_window = (0, 0, self.width, self.height)
                 else:
                     # draw the circle and centroid on the frame, then update the list of tracked points
-                    cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(int(prediction[0]), int(prediction[1]), area),
-                                (19, self.high - 9),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-                    cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(int(prediction[0]), int(prediction[1]), area),
-                                (20, self.high - 10),
+                    cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(float(tp[0]), float(tp[1]), area),
+                                (20, self.height - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
                     try:
-                        cv2.polylines(vis, pts, )
+                        cv2.polylines(vis, [pts], 1, (0, 255, 0), 1, cv2.LINE_AA)
                         cv2.ellipse(vis, track_box, (0, 0, 255), 2)
+                        cv2.ellipse(vis, pred_box, (255, 0, 0), 2)
                     except:
                         print(track_box)
 
-                    cv2.circle(vis, (x, y), 4, (0, 0, 255), -1)
+                    cv2.circle(vis, (int(x), int(y)), 4, (0, 0, 255), -1)
 
                     # check if borders was trespassed
                     # trespass_borders(frame=frame, curr_pos=x, left_border=left_border, right_border=right_border)
 
                     # update the points queue
                     self.trail_pts.appendleft((int(x), int(y)))
-                    self.lastCenter = prediction
+                    self.lastCenter = tp
+
                 if self.show_backproj:
                     vis[:] = prob[..., np.newaxis]
-
 
             self.draw_trails(vis)
             cv2.imshow('camshift', vis)
