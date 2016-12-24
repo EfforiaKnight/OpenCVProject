@@ -163,6 +163,10 @@ class App(object):
                     cv2.putText(vis, "Target lost", (int(self.width / 2), int(self.height / 2)), cv2.FONT_HERSHEY_SIMPLEX,
                                 0.6, (0, 0, 255), 1, cv2.LINE_AA)
                     self.track_window = (0, 0, self.width, self.height)
+                    self.kalman.correct(np.array([[np.float32(tp[0])], [np.float32(tp[1])]]))
+                    tp_l = self.kalman.predict()
+                    pred_box = ((int(tp_l[0]), int(tp_l[1])), (height, width), angle)
+                    cv2.ellipse(vis, pred_box, (255, 0, 0), 2)
                 else:
                     # draw the circle and centroid on the frame, then update the list of tracked points
                     cv2.putText(vis, "[{:.1f},{:.1f}] Area={:.1f}".format(float(tp[0]), float(tp[1]), area),
