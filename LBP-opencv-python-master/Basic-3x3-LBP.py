@@ -42,7 +42,7 @@ for x in range(0, len(img)):
 
         transformed_img.itemset((x,y), res)
 
-    print x
+    print(x)
 
 cv2.imshow('image', img)
 cv2.imshow('thresholded image', transformed_img)
