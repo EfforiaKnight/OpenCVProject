@@ -40,3 +40,4 @@ class RectSelector:
     @property
     def dragging(self):
         return self.drag_rect is not None
+
