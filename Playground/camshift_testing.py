@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from Playground.rectselector import RectSelector
+from Playground.localbinarypatterns import LocalBinaryPatterns as LBP
 
 
 class App(object):
@@ -12,6 +13,9 @@ class App(object):
 
         cv2.namedWindow('camshift')
         self.obj_select = RectSelector('camshift', self.onmouse)
+        radius = 3
+        n_point = 8 * radius
+        self.lbpDesc = LBP(n_point, radius)
 
         self.HSV_CHANNELS = (
             (8, [0, 180], "hue"),  # Hue
@@ -28,6 +32,13 @@ class App(object):
         hsvRoi = self.hsv[ymin:ymax, xmin:xmax]
         lbpRoi = self.frame[ymin:ymax, xmin:xmax]
         lbpRoi = cv2.cvtColor(lbpRoi, cv2.COLOR_BGR2GRAY)
+        lbpHist, lbpImage = self.lbpDesc.describe(lbpRoi)
+
+        lbpHist = np.asarray(lbpHist[0], dtype=np.float32)
+        print(lbpHist[..., np.newaxis])
+        self.show_hist(lbpHist)
+        cv2.imshow("lbp", lbpImage)
+
         self.calcHSVhist(hsvRoi)
         self.track_window = (xmin, ymin, xmax - xmin, ymax - ymin)
 
@@ -54,7 +65,7 @@ class App(object):
         return back_proj_prob
 
     @staticmethod
-    def show_hist(hist, channel):
+    def show_hist(hist, channel=None):
         bin_count = hist.shape[0]
         bin_w = 24
         img = np.zeros((256, bin_count * bin_w, 3), np.uint8)
@@ -66,9 +77,12 @@ class App(object):
             elif str(channel) == 'sat':
                 cv2.rectangle(img, (i * bin_w + 2, 255), ((i + 1) * bin_w - 2, 255 - h),
                               (180, int(255.0 * i / bin_count), 255), -1)
-            else: # str(channel) == 'val'
+            elif str(channel) == 'val':
                 cv2.rectangle(img, (i * bin_w + 2, 255), ((i + 1) * bin_w - 2, 255 - h),
                               (180, 255, int(255.0 * i / bin_count)), -1)
+            else:
+                cv2.rectangle(img, (i * bin_w + 2, 255), ((i + 1) * bin_w - 2, 255 - h),
+                              (180, 255, 255), -1)
         img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
         cv2.imshow('hist ' + str(channel), img)
 
