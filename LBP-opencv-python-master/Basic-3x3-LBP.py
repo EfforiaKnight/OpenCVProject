@@ -17,8 +17,8 @@ def get_pixel_else_0(l, idx, idy, default=0):
     except IndexError:
         return default
 
-img = cv2.imread('aneesh.jpeg', 0)
-transformed_img = cv2.imread('aneesh.jpeg', 0)
+img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
+transformed_img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
 
 for x in range(0, len(img)):
     for y in range(0, len(img[0])):

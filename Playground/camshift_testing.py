@@ -7,6 +7,8 @@ from Playground.localbinarypatterns import LocalBinaryPatterns as LBP
 class App(object):
     def __init__(self):
         self.cam = cv2.VideoCapture(0)
+        self.cam.set(3, 320)
+        self.cam.set(4, 240)
         ret, self.frame = self.cam.read()
 
         self.height, self.width = self.frame.shape[:2]
@@ -18,7 +20,7 @@ class App(object):
         self.lbpDesc = LBP(n_point, radius)
 
         self.HSV_CHANNELS = (
-            (8, [0, 180], "hue"),  # Hue
+            (16, [0, 180], "hue"),  # Hue
             (8, [0, 256], "sat"),  # Saturation
             (8, [0, 256], "val")  # Value
         )
@@ -30,14 +32,14 @@ class App(object):
         self.histHSV = []
         xmin, ymin, xmax, ymax = rect
         hsvRoi = self.hsv[ymin:ymax, xmin:xmax]
-        lbpRoi = self.frame[ymin:ymax, xmin:xmax]
-        lbpRoi = cv2.cvtColor(lbpRoi, cv2.COLOR_BGR2GRAY)
-        lbpHist, lbpImage = self.lbpDesc.describe(lbpRoi)
+        # lbpRoi = self.frame[ymin:ymax, xmin:xmax]
+        # lbpRoi = cv2.cvtColor(lbpRoi, cv2.COLOR_BGR2GRAY)
+        # lbpHist, lbpImage = self.lbpDesc.describe(lbpRoi)
 
-        lbpHist = np.asarray(lbpHist[0], dtype=np.float32)
-        print(lbpHist[..., np.newaxis])
-        self.show_hist(lbpHist)
-        cv2.imshow("lbp", lbpImage)
+        # lbpHist = np.asarray(lbpHist[0], dtype=np.float32)
+        # print(lbpHist[..., np.newaxis])
+        # self.show_hist(lbpHist)
+        # cv2.imshow("lbp", lbpImage)
 
         self.calcHSVhist(hsvRoi)
         self.track_window = (xmin, ymin, xmax - xmin, ymax - ymin)
@@ -54,12 +56,14 @@ class App(object):
 
     def calcBackProjection(self):
         back_proj_prob = np.ones(shape=(self.height, self.width), dtype=np.uint8) * 255
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        # kernel = np.ones((3, 3), np.uint8)
+        kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        kernel = np.ones((3, 3), np.uint8)
         for channel, param in enumerate(self.HSV_CHANNELS):
             prob = cv2.calcBackProject([self.hsv], [channel], self.histHSV[channel], param[1], 1)
-            ret, prob = cv2.threshold(prob, 30, 255, 0)
-            prob = cv2.morphologyEx(prob, cv2.MORPH_OPEN, kernel, iterations=2)
+            ret, prob = cv2.threshold(prob, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+            prob = cv2.morphologyEx(prob, cv2.MORPH_ERODE, kernel_erode, iterations=2)
+            prob = cv2.morphologyEx(prob, cv2.MORPH_DILATE, kernel_dilate, iterations=2)
             back_proj_prob &= prob
 
         return back_proj_prob
@@ -111,7 +115,7 @@ class App(object):
             self.obj_select.draw(vis)
             cv2.imshow('camshift', vis)
 
-            ch = 0xFF & cv2.waitKey(5)
+            ch = 0xFF & cv2.waitKey(1)
             if ch == 27:
                 break
             if ch == ord('b'):

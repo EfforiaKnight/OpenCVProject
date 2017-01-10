@@ -43,6 +43,8 @@ from Playground.video import presets
 class App(object):
     def __init__(self, video_src):
         self.cam = video.create_capture(video_src, presets['cube'])
+        self.cam.set(3, 320)
+        self.cam.set(4, 240)
         ret, self.frame = self.cam.read()
         cv2.namedWindow('camshift')
         cv2.setMouseCallback('camshift', self.onmouse)
@@ -77,6 +79,7 @@ class App(object):
         cv2.imshow('hist', img)
 
     def run(self):
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         while True:
             ret, self.frame = self.cam.read()
             vis = self.frame.copy()
@@ -100,6 +103,8 @@ class App(object):
                 self.selection = None
                 prob = cv2.calcBackProject([hsv], [0], self.hist, [0, 180], 1)
                 prob &= mask
+                ret, prob = cv2.threshold(prob, 100, 255, 0)
+                prob = cv2.morphologyEx(prob, cv2.MORPH_OPEN, kernel, iterations=2)
                 term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1 )
                 track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
 

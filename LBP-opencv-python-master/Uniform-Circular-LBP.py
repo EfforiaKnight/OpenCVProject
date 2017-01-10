@@ -37,8 +37,8 @@ def find_variations(pixel_values):
         prev = cur
     return t
 
-img = cv2.imread('aneesh.jpeg', 0)
-transformed_img = cv2.imread('aneesh.jpeg', 0)
+img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
+transformed_img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
 unassigned = []
 pixel_values = set()
 
@@ -90,7 +90,7 @@ for x in range(0, len(img)):
             pixel_values.add(res)
         else:
             unassigned.append((x,y))
-    print x
+    print(x)
 
 unassigned_value = len(pixel_values)
 pixel_values = sorted(pixel_values)

@@ -28,11 +28,11 @@ def get_pixel_else_0(l, idx, idy):
         return 0
 
 
-img = cv2.imread('aneesh.jpeg', 0)
-transformed_img = cv2.imread('aneesh.jpeg', 0)
+img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
+transformed_img = cv2.imread('/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg', 0)
 
 P = 8 # number of pixels
-R = 1 # radius 
+R = 2 # radius
 
 for x in range(0, len(img)):
     for y in range(0, len(img[0])):
@@ -73,7 +73,7 @@ for x in range(0, len(img)):
 
         transformed_img.itemset((x,y), res)
 
-    print x
+    print(x)
 
 cv2.imshow('image', img)
 cv2.imshow('thresholded image', transformed_img)
