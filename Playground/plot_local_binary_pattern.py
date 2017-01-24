@@ -14,6 +14,7 @@ The below code is just used to plot the schematic.
 from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 
 METHOD = 'uniform'
@@ -102,7 +103,8 @@ def highlight_bars(bars, indexes):
         bars[i].set_facecolor('r')
 
 
-image = data.load('brick.png')
+# image = data.load('brick.png')
+image = cv2.imread("/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg", 0)
 lbp = local_binary_pattern(image, n_points, radius, METHOD)
 
 
@@ -180,7 +182,8 @@ def match(refs, img):
 
 brick = data.load('brick.png')
 grass = data.load('grass.png')
-wall = data.load('rough-wall.png')
+# wall = data.load('rough-wall.png')
+wall = cv2.imread("/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg", 0)
 
 refs = {
     'brick': local_binary_pattern(brick, n_points, radius, METHOD),
@@ -190,12 +193,12 @@ refs = {
 
 # classify rotated textures
 print('Rotated images matched against references using LBP:')
-print('original: brick, rotated: 30deg, match result: ',
-      match(refs, rotate(brick, angle=30, resize=False)))
+print('original: wall, rotated: 30deg, match result: ',
+      match(refs, rotate(wall, angle=30, resize=False)))
 print('original: brick, rotated: 70deg, match result: ',
-      match(refs, rotate(brick, angle=70, resize=False)))
+      match(refs, rotate(wall, angle=70, resize=False)))
 print('original: grass, rotated: 145deg, match result: ',
-      match(refs, rotate(grass, angle=145, resize=False)))
+      match(refs, rotate(wall, angle=145, resize=False)))
 
 # plot histograms of LBP of textures
 fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3,

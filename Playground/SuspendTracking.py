@@ -19,6 +19,12 @@ def show_hist(hist, type):
     img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
     cv2.imshow('hist ' + str(type), img)
 
+def kullback_leibler_divergence(p, q):
+    p = np.asarray(p)
+    q = np.asarray(q)
+    filt = np.logical_and(p != 0, q != 0)
+    return np.sum(p[filt] * np.log2(p[filt] / q[filt]))
+
 image = cv2.imread("/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg")
 cv2.imshow("image", image)
 
@@ -34,6 +40,9 @@ sd = 0
 sd_lbp = 0
 eps = 1e-11
 teta = 3
+
+radius = 3
+n_points = radius * 8
 
 roi = None
 ROI_selector = RectSelector("image", onmouse)
@@ -52,10 +61,11 @@ while True:
                 target_hist = cv2.calcHist([hsv_roi], [0], None, [24], [0, 180])
                 show_hist(target_hist, "target")
 
-                target_lbp = lbp(gray_roi, 24, 3, 'uniform')
+                target_lbp = lbp(gray_roi, n_points, radius, 'uniform')
                 target_lbp = np.asarray(target_lbp, dtype=np.uint8)
                 n_bins = int(target_lbp.max() + 1)
                 target_lbp_hist = cv2.calcHist([target_lbp], [0], None, [n_bins], [0, n_bins])
+                # cv2.normalize(target_lbp_hist, target_lbp_hist, 0, 1, cv2.NORM_MINMAX)
                 # target_lbp_hist, _ = np.histogram(target_lbp, bins=n_bins, range=(0, n_bins), normed=True)
                 # target_lbp_hist = np.asarray(target_lbp_hist, dtype=np.float32)
             elif candidate_flag:
@@ -63,10 +73,11 @@ while True:
                 candidate_hist = cv2.calcHist([hsv_roi], [0], None, [24], [0, 180])
                 show_hist(candidate_hist, "candidate")
 
-                candidate_lbp = lbp(gray_roi, 24, 3, 'uniform')
+                candidate_lbp = lbp(gray_roi, n_points, radius, 'uniform')
                 candidate_lbp = np.asarray(candidate_lbp, dtype=np.uint8)
                 n_bins = int(candidate_lbp.max() + 1)
                 candidate_lbp_hist = cv2.calcHist([candidate_lbp], [0], None, [n_bins], [0, n_bins])
+                # cv2.normalize(candidate_lbp_hist, candidate_lbp_hist, 0, 1, cv2.NORM_MINMAX)
                 # candidate_lbp_hist, _ = np.histogram(candidate_lbp, bins=n_bins, range=(0, n_bins), normed=True)
                 # candidate_lbp_hist = np.asarray(candidate_lbp_hist, dtype=np.float32)
     else:
@@ -89,6 +100,7 @@ while True:
         print("-" * 60)
 
         bh_lbp_distance = cv2.compareHist(target_lbp_hist, candidate_lbp_hist, cv2.HISTCMP_BHATTACHARYYA)
+        # bh_lbp_distance = kullback_leibler_divergence(target_lbp_hist, candidate_lbp_hist)
 
         mean_lbp_prev = mean_lbp
         sd_lbp_prev =sd_lbp
