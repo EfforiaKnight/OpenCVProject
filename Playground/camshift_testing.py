@@ -1,20 +1,29 @@
 import numpy as np
 import cv2
+from Playground.WebcamVideoStream import WebcamVideoStream
 from Playground.rectselector import RectSelector
+from Playground.SuspendTracking import SuspendTracking
 from Playground.localbinarypatterns import LocalBinaryPatterns as LBP
 
 
 class App(object):
     def __init__(self):
-        self.cam = cv2.VideoCapture(0)
-        self.cam.set(3, 320)
-        self.cam.set(4, 240)
+        # self.cam = cv2.VideoCapture(0)
+        # self.cam.set(3, 320)
+        # self.cam.set(4, 240)
+        self.cam = WebcamVideoStream(src=0).start()
+
         ret, self.frame = self.cam.read()
 
+        self.suspend_tracking = SuspendTracking(teta=3)
+
         self.height, self.width = self.frame.shape[:2]
+        self.kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        self.kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
 
         cv2.namedWindow('camshift')
         self.obj_select = RectSelector('camshift', self.onmouse)
+
         radius = 3
         n_point = 8 * radius
         self.lbpDesc = LBP(n_point, radius)
@@ -27,49 +36,63 @@ class App(object):
 
         self.show_backproj = False
         self.track_window = None
+        self.histHSV = []
+        self.track_box = None
 
     def onmouse(self, rect):
-        self.histHSV = []
         xmin, ymin, xmax, ymax = rect
         hsvRoi = self.hsv[ymin:ymax, xmin:xmax]
-        # lbpRoi = self.frame[ymin:ymax, xmin:xmax]
-        # lbpRoi = cv2.cvtColor(lbpRoi, cv2.COLOR_BGR2GRAY)
-        # lbpHist, lbpImage = self.lbpDesc.describe(lbpRoi)
-
-        # lbpHist = np.asarray(lbpHist[0], dtype=np.float32)
-        # print(lbpHist[..., np.newaxis])
-        # self.show_hist(lbpHist)
-        # cv2.imshow("lbp", lbpImage)
 
         self.calcHSVhist(hsvRoi)
         self.track_window = (xmin, ymin, xmax - xmin, ymax - ymin)
+        self.init_suspend(hsvRoi)
+
+    def init_suspend(self, hsvRoi):
+        track_window_condition = self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0
+        if track_window_condition:
+            self.camshift_algorithm()
+            self.suspend_tracking.init(hsvRoi)
 
     def calcHSVhist(self, hsvRoi):
+        self.histHSV = []
         for channel, param in enumerate(self.HSV_CHANNELS):
             # Init HSV histogram
-            if len(self.histHSV) != len(self.HSV_CHANNELS):
-                hist = cv2.calcHist([hsvRoi], [channel], None, [param[0]], param[1])
-                hist = cv2.normalize(hist, hist, 0, 256, cv2.NORM_MINMAX)
-                self.histHSV.append(hist)
-                # Show hist of each channel separately
-                self.show_hist(hist, param[2])
+            hist = cv2.calcHist([hsvRoi], [channel], None, [param[0]], param[1])
+            hist = cv2.normalize(hist, hist, 0, 255, cv2.NORM_MINMAX)
+            self.histHSV.append(hist)
+            # Show hist of each channel separately
+            self.show_hist(hist, param[2])
 
     def calcBackProjection(self):
-        back_proj_prob = np.ones(shape=(self.height, self.width), dtype=np.uint8) * 255
-        kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        kernel = np.ones((3, 3), np.uint8)
+        ch_prob = []
+        ch_back_proj_prob = []
+        # back_proj_prob = np.ones(shape=(self.height, self.width), dtype=np.uint8) * 255
+        # back_proj_prob = np.zeros(shape=(self.height, self.width), dtype=np.uint8)
+
         for channel, param in enumerate(self.HSV_CHANNELS):
             prob = cv2.calcBackProject([self.hsv], [channel], self.histHSV[channel], param[1], 1)
-            ret, prob = cv2.threshold(prob, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-            prob = cv2.morphologyEx(prob, cv2.MORPH_ERODE, kernel_erode, iterations=2)
-            prob = cv2.morphologyEx(prob, cv2.MORPH_DILATE, kernel_dilate, iterations=2)
-            back_proj_prob &= prob
+            cv2.imshow('Back projection ' + str(param[2]), prob)
+            # ret, prob = cv2.threshold(prob, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            ret, prob = cv2.threshold(prob, 70, 255, cv2.THRESH_BINARY)
+            cv2.imshow('Back projection thresh ' + str(param[2]), prob)
+            # prob = cv2.morphologyEx(prob, cv2.MORPH_ERODE, self.kernel_erode, iterations=2)
+            # prob = cv2.morphologyEx(prob, cv2.MORPH_DILATE, self.kernel_dilate, iterations=3)
+            # back_proj_prob = cv2.bitwise_and(back_proj_prob, prob)
+            # back_proj_prob = cv2.addWeighted(back_proj_prob, 0.4, prob, 0.6, 0)
+            ch_prob.append(prob)
+        ch_back_proj_prob.append(cv2.addWeighted(ch_prob[0], 0.7, ch_prob[1], 0.3, 0))
+        ch_back_proj_prob.append(cv2.addWeighted(ch_prob[0], 0.7, ch_prob[2], 0.3, 0))
+
+        back_proj_prob = cv2.bitwise_and(ch_back_proj_prob[0], ch_back_proj_prob[1])
+        ret, back_proj_prob = cv2.threshold(back_proj_prob, 150, 255, cv2.THRESH_BINARY)
+
+        back_proj_prob = cv2.morphologyEx(back_proj_prob, cv2.MORPH_ERODE, self.kernel_erode, iterations=1)
+        back_proj_prob = cv2.morphologyEx(back_proj_prob, cv2.MORPH_DILATE, self.kernel_erode, iterations=2)
 
         return back_proj_prob
 
     @staticmethod
-    def show_hist(hist, channel=None):
+    def show_hist(hist, channel='None'):
         bin_count = hist.shape[0]
         bin_w = 24
         img = np.zeros((256, bin_count * bin_w, 3), np.uint8)
@@ -90,27 +113,39 @@ class App(object):
         img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
         cv2.imshow('hist ' + str(channel), img)
 
+    def camshift_algorithm(self):
+        prob = self.calcBackProjection()
+        term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
+        self.track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
+
+        if self.show_backproj:
+            cv2.imshow("Back Projection", prob[..., np.newaxis])
+        else:
+            cv2.destroyWindow("Back Projection")
+
     def run(self):
         while True:
             if not self.obj_select.dragging:
                 ret, self.frame = self.cam.read()
-                self.hsv = cv2.medianBlur(self.frame, 11)
+                # blur_frame = cv2.GaussianBlur(self.frame, (21,21), 0)
                 self.hsv = cv2.cvtColor(self.frame, cv2.COLOR_BGR2HSV)
 
             if ret:
                 vis = self.frame.copy()
 
-            if self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0:
-                prob = self.calcBackProjection()
-                term_crit = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1)
-                track_box, self.track_window = cv2.CamShift(prob, self.track_window, term_crit)
+            track_window_condition = self.track_window and self.track_window[2] > 0 and self.track_window[3] > 0
+            if track_window_condition and not self.suspend_tracking.is_suspend(self.hsv, self.track_box):
+                self.camshift_algorithm()
 
-                if self.show_backproj:
-                    vis[:] = prob[..., np.newaxis]
                 try:
-                    cv2.ellipse(vis, track_box, (0, 0, 255), 2)
+                    cv2.ellipse(vis, self.track_box, (0, 0, 255), 2)
+                    pts = cv2.boxPoints(self.track_box)
+                    pts = np.int0(pts)
+                    cv2.polylines(vis, [pts], True, 255, 2)
                 except:
-                    print(track_box)
+                    print(self.track_box)
+            else:
+                cv2.putText(vis, 'Target Lost', (10, 230), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
             self.obj_select.draw(vis)
             cv2.imshow('camshift', vis)

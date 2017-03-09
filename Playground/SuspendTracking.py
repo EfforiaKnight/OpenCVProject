@@ -1,128 +1,81 @@
 import cv2
 import numpy as np
-from Playground.rectselector import RectSelector
-from skimage.feature import local_binary_pattern as lbp
 
 
-def onmouse(rect):
-    xmin, ymin, xmax, ymax = rect
-    global roi, image
-    roi = image[ymin:ymax, xmin:xmax]
+class SuspendTracking:
+    def __init__(self, teta):
+        self.teta = teta  # Scalar for std influence
+        self.cnt = 1  # Number of elapse frame for mean and std measures
 
-def show_hist(hist, type):
-    bin_count = hist.shape[0]
-    bin_w = 24
-    img = np.zeros((256, bin_count*bin_w, 3), np.uint8)
-    for i in range(bin_count):
-        h = int(hist[i])
-        cv2.rectangle(img, (i*bin_w+2, 255), ((i+1)*bin_w-2, 255-h), (int(180.0*i/bin_count), 255, 255), -1)
-    img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
-    cv2.imshow('hist ' + str(type), img)
+        self.objectHist = None
 
-def kullback_leibler_divergence(p, q):
-    p = np.asarray(p)
-    q = np.asarray(q)
-    filt = np.logical_and(p != 0, q != 0)
-    return np.sum(p[filt] * np.log2(p[filt] / q[filt]))
+        self.mean = 0
+        self.std = 0
 
-image = cv2.imread("/home/efforia/PycharmProjects/OpenCVProject/images/grant.jpg")
-cv2.imshow("image", image)
+    def init(self, hsvROI):
+        self.objectHist = cv2.calcHist([hsvROI], [0], None, [24], [0, 180])
+        self.show_hist(self.objectHist, "Object")
 
-target_flag = False
-candidate_flag = False
-target_hist = None
-candidate_hist = None
+    def calc_candidate_hist(self, hsv_frame, track_box):
+        mask = self.mask_roi(hsv_frame, track_box)
+        candidate_hist = cv2.calcHist([hsv_frame], [0], mask, [24], [0, 180])
+        self.show_hist(candidate_hist, "Candidate")
+        return candidate_hist
 
-t = 1
-mean = 0
-mean_lbp = 0
-sd = 0
-sd_lbp = 0
-eps = 1e-11
-teta = 3
+    def is_suspend(self, hsv_frame, track_box):
+        candidateHist = self.calc_candidate_hist(hsv_frame, track_box)
+        bh_distance = cv2.compareHist(self.objectHist, candidateHist, cv2.HISTCMP_BHATTACHARYYA)
+        prev_mean = self.mean
+        prev_std = self.std
 
-radius = 3
-n_points = radius * 8
+        adaptive_threshold = self.calc_adaptive_threshold(prev_mean, prev_std, self.teta)
+        if bh_distance >= adaptive_threshold and adaptive_threshold != 0 or adaptive_threshold >= 1:
+            print("bh={} > adptv_thresh={}, statement is {}".format(bh_distance, prev_mean + self.teta * prev_std,
+                                                                    bh_distance > prev_mean + self.teta * prev_std))
+            print("Suspending tracking, target lost")
+            self.cnt = 1
+            self.mean = 0
+            self.std = 0
+            return True
+        else:
+            print("bh={} and adaptive threshold = {}".format(bh_distance, adaptive_threshold))
+            self.mean = self.calc_new_mean(bh_distance, prev_mean, self.cnt)
+            self.std = self.calc_new_std(bh_distance, prev_mean, self.mean, prev_std, self.cnt)
+            self.cnt += 1
+            return False
 
-roi = None
-ROI_selector = RectSelector("image", onmouse)
+    @staticmethod
+    def calc_new_mean(distance, prev_mean, cnt):
+        mean = prev_mean + (distance - prev_mean) / cnt
+        return mean
 
-while True:
-    if not ROI_selector.dragging:
-        cv2.imshow("image", image)
-        if roi is not None:
-            cv2.imshow("roi", roi)
-            hsv_roi = cv2.cvtColor(roi.copy(), cv2.COLOR_BGR2HSV)
-            gray_roi = cv2.cvtColor(roi.copy(), cv2.COLOR_BGR2GRAY)
+    @staticmethod
+    def calc_new_std(distance, prev_mean, new_mean, prev_std, cnt, eps=1e-11):
+        std = (cnt - 2) * (prev_std ** 2) + (distance - prev_mean) * (distance - new_mean)
+        std = np.sqrt(std / (cnt - 1 + eps))
+        return std
 
-            if target_flag:
-                target_flag = False
-                cv2.imshow("target roi", roi)
-                target_hist = cv2.calcHist([hsv_roi], [0], None, [24], [0, 180])
-                show_hist(target_hist, "target")
+    @staticmethod
+    def calc_adaptive_threshold(mean, std, teta):
+        threshold = mean + teta * std
+        return threshold
 
-                target_lbp = lbp(gray_roi, n_points, radius, 'uniform')
-                target_lbp = np.asarray(target_lbp, dtype=np.uint8)
-                n_bins = int(target_lbp.max() + 1)
-                target_lbp_hist = cv2.calcHist([target_lbp], [0], None, [n_bins], [0, n_bins])
-                # cv2.normalize(target_lbp_hist, target_lbp_hist, 0, 1, cv2.NORM_MINMAX)
-                # target_lbp_hist, _ = np.histogram(target_lbp, bins=n_bins, range=(0, n_bins), normed=True)
-                # target_lbp_hist = np.asarray(target_lbp_hist, dtype=np.float32)
-            elif candidate_flag:
-                candidate_flag = False
-                candidate_hist = cv2.calcHist([hsv_roi], [0], None, [24], [0, 180])
-                show_hist(candidate_hist, "candidate")
+    # Mask the object in the frame. Return masked object
+    @staticmethod
+    def mask_roi(frame, track_box):
+        mask = np.zeros(frame.shape[:2], dtype="uint8")
+        cv2.ellipse(mask, track_box, 255, -1)
+        cv2.imshow("Masked Roi", mask)
+        return mask
 
-                candidate_lbp = lbp(gray_roi, n_points, radius, 'uniform')
-                candidate_lbp = np.asarray(candidate_lbp, dtype=np.uint8)
-                n_bins = int(candidate_lbp.max() + 1)
-                candidate_lbp_hist = cv2.calcHist([candidate_lbp], [0], None, [n_bins], [0, n_bins])
-                # cv2.normalize(candidate_lbp_hist, candidate_lbp_hist, 0, 1, cv2.NORM_MINMAX)
-                # candidate_lbp_hist, _ = np.histogram(candidate_lbp, bins=n_bins, range=(0, n_bins), normed=True)
-                # candidate_lbp_hist = np.asarray(candidate_lbp_hist, dtype=np.float32)
-    else:
-        rect_image = image.copy()
-        ROI_selector.draw(rect_image)
-        cv2.imshow("image", rect_image)
-
-    if (type(target_hist) and type(candidate_hist)) is not type(None):
-        bh_distance = cv2.compareHist(target_hist, candidate_hist, cv2.HISTCMP_BHATTACHARYYA)
-
-        mean_prev = mean
-        sd_prev =sd
-        mean = mean + (bh_distance-mean)/t
-        sd = (t-2)*sd**2 + (bh_distance-mean_prev)*(bh_distance-mean)
-        sd /= t-1 + eps
-        sd = np.sqrt(sd)
-
-        print("bh={}, mean_bh={}, sd={}".format(bh_distance, mean, sd))
-        print("bh={} > adptv_thresh={}, statement is {}".format(bh_distance, mean_prev + teta * sd_prev, bh_distance > mean_prev + teta * sd_prev))
-        print("-" * 60)
-
-        bh_lbp_distance = cv2.compareHist(target_lbp_hist, candidate_lbp_hist, cv2.HISTCMP_BHATTACHARYYA)
-        # bh_lbp_distance = kullback_leibler_divergence(target_lbp_hist, candidate_lbp_hist)
-
-        mean_lbp_prev = mean_lbp
-        sd_lbp_prev =sd_lbp
-        mean_lbp = mean_lbp + (bh_lbp_distance-mean_lbp)/t
-        sd_lbp = (t-2)*sd_lbp**2 + (bh_lbp_distance-mean_lbp_prev)*(bh_lbp_distance-mean_lbp)
-        sd_lbp /= t-1 + eps
-        sd_lbp = np.sqrt(sd_lbp)
-
-        print("bh_lbp={}, mean_bh_lbp={}, sd_lbp={}".format(bh_lbp_distance, mean_lbp, sd_lbp))
-        print("bh_lbp={} > adptv_thresh_lbp={}, statement is {}".format(bh_lbp_distance, mean_lbp_prev + teta * sd_lbp_prev, bh_lbp_distance > mean_lbp_prev + 2 * sd_lbp_prev))
-        print("-" * 60)
-
-        t += 1
-        candidate_hist = None
-
-    ch = 0xFF & cv2.waitKey(1)
-    if ch == 27:
-        break
-    elif ch == ord('t'):
-        target_flag = True
-    elif ch == ord('c'):
-        candidate_flag = True
-
-cv2.destroyAllWindows()
-
+    @staticmethod
+    def show_hist(hist, type):
+        bin_count = hist.shape[0]
+        bin_w = 24
+        img = np.zeros((256, bin_count * bin_w, 3), np.uint8)
+        for i in range(bin_count):
+            h = int(hist[i])
+            cv2.rectangle(img, (i * bin_w + 2, 255), ((i + 1) * bin_w - 2, 255 - h),
+                          (int(180.0 * i / bin_count), 255, 255), -1)
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+        cv2.imshow(str(type) + ' Hue Hist', img)
