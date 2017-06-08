@@ -6,7 +6,7 @@ from CVProject.rectselector import RectSelector
 from CVProject.ColorDistance import LABDistance
 from CVProject.localbinarypatterns import LocalBinaryPatterns
 from CVProject.AdaptiveThreshold import AdaptiveThreshold
-
+from CVProject.SuddenChanges import SuddenChanges
 
 class App(object):
     def __init__(self):
@@ -30,6 +30,10 @@ class App(object):
 
         self.ColorCheck = AdaptiveThreshold(teta=3, max_lost_cnt=1)
         self.LBPCheck = AdaptiveThreshold(teta=2, max_lost_cnt=1)
+
+        self.XYSuddenChange = SuddenChanges(maxlen=20, N_vars=2, var_type="X, Y", threshold=35)
+        self.AreaSuddenChange = SuddenChanges(maxlen=10, N_vars=1, var_type="Area", threshold=4500)
+        self.sudden_change = False
 
         self.ColorDistance = LABDistance()
         self.LBPDistance = LocalBinaryPatterns(numPoints=8, radius=2, update_prev_hist=self.conf['MaxLBPFrameUpdate'])
@@ -68,8 +72,15 @@ class App(object):
 
         self.track_window = (xmin, ymin, xmax - xmin, ymax - ymin)
         # self.init_suspend(labRoi)
+
+        '''
+        Initialized all track lost conditions and fps counter
+        '''
         self.isLost = False
         self.isLBPLost = False
+        self.sudden_change = False
+        self.XYSuddenChange.ClearQue()
+        self.AreaSuddenChange.ClearQue()
         self.fps.reset()
 
     def calcLABhist(self, labRoi):
@@ -116,8 +127,7 @@ class App(object):
 
         return back_proj_prob
 
-    @staticmethod
-    def show_hist(hist, channel='None'):
+    def show_hist(self, hist, channel='None'):
         bin_count = hist.shape[0]
         bin_w = 24
         img = np.zeros((256, bin_count * bin_w, 3), np.uint8)
@@ -197,16 +207,20 @@ class App(object):
 
             # Main proccess flow
             if track_window_condition:
-                if not target_lost:
+                if not target_lost and not self.sudden_change:
                     # Apply CamShift algorithm and get new track_box
                     self.camshift_algorithm()
 
                     # Check if target object lost and return last frame number the tracking lost it
                     self.check_if_object_lost()
 
-                    (x,y) = self.track_box[0]
+                    if self.fps.NumFrame % 4 == 0:
+                        (x, y) = self.track_box[0]
+                        self.sudden_change = self.XYSuddenChange.CheckChange(x, y)
 
-                    (width, heigth) = self.track_box[1]
+                        (width, height) = self.track_box[1]
+                        self.sudden_change = self.AreaSuddenChange.CheckChange(width * height)
+
 
                     if self.fps.NumFrame - self.last_frame_number >= self.conf['MaxFrameDiffClr']:
                         self.isLBPLost = False
